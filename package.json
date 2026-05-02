@@ -34,7 +34,7 @@
     "gaiji",
     "jis-x-0213"
   ],
-  "author": "NOT SO BAD, LLC.",
+  "author": "NOT SO BAD",
   "license": "MIT",
   "engines": {
     "node": ">=18"
