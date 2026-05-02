@@ -159,10 +159,8 @@ pnpm install
 
 ```
 .
-├── data/
-│   └── jisx0213-2004-std.txt    # 元データ（コミット、npm publish には含まない）
 ├── scripts/
-│   └── build-gaiji-table.ts     # txt → TS const に変換
+│   └── build-gaiji-table.ts     # Project X0213 の txt をリモートから取得して TS const に変換
 ├── src/
 │   ├── data/
 │   │   └── gaiji-table.ts       # 自動生成、コミット、配布物に含む
