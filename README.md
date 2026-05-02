@@ -121,7 +121,7 @@ convertGaiji('※［＃「てへん＋劣」、第3水準1-84-77］');
 
 ```ts
 type ChunkTextOptions = {
-  overlapLastSentence?: boolean; // 各チャンクの最終文を次のチャンクの先頭にも含める（default: false）
+  overlapLastSentence?: boolean; // 各チャンクの最終文を次のチャンクの先頭にも含める（default: true）
 };
 ```
 
