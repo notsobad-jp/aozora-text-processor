@@ -1,7 +1,7 @@
 {
   "name": "aozora-text-processor",
   "version": "0.1.0",
-  "description": "青空文庫テキストを整形するためのユーティリティ集（ルビ除去、注記除去、外字変換、文章分割、チャンク分割）",
+  "description": "青空文庫テキストを整形するためのユーティリティ集（ルビ除去、注記除去、外字変換、文章分割）",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -12,7 +12,11 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "vite build && tsc --emitDeclarationOnly",
     "build:gaiji-table": "tsx scripts/build-gaiji-table.ts",
