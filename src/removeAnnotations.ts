@@ -1,5 +1,8 @@
 export type RemoveAnnotationsOptions = {
-  /** 外字注記 ※［＃...］ を残すか（default: true） */
+  /**
+   * 外字注記 ※［＃...］ を残すか
+   * @default true
+   */
   skipGaiji?: boolean;
 };
 
