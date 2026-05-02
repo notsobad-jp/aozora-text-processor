@@ -79,12 +79,12 @@ removeRuby('私は｜彼女《かのじょ》が漢字《かんじ》を書い�
 
 ```ts
 type RemoveAnnotationsOptions = {
-  skipGaiji?: boolean; // 外字注記 ※［＃...］ を残すか（default: true）
+  skipGaiji?: boolean; // 外字注記（例: ※［＃「亻＋耳」、第3水準1-14-37］）を残すか（default: true）
 };
 ```
 
 - 組版指定（`［＃ここから２字下げ］` など）、見出し、傍点、訂正、図版などすべての注記を一括削除
-- デフォルトでは外字注記 `※［＃...］` は対象外（`convertGaiji` の対象として残します）。`skipGaiji: false` を指定するとこれらも削除
+- デフォルトでは外字注記（例: `※［＃「亻＋耳」、第3水準1-14-37］`）は対象外（`convertGaiji` の対象として残します）。`skipGaiji: false` を指定するとこれらも削除
 - 注記が単独で行を占めていた場合、その行の改行は残します
 
 ```ts
