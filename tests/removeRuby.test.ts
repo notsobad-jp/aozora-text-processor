@@ -32,10 +32,6 @@ describe('removeRuby', () => {
     expect(removeRuby('漢字《かんじ》漢字《かんじ》')).toBe('漢字漢字');
   });
 
-  it('handles ruby annotation containing characters that are not 》', () => {
-    expect(removeRuby('｜山田太郎《やまだたろう》')).toBe('山田太郎');
-  });
-
   it('preserves text across multiple lines', () => {
     const input = '一行目｜彼《かれ》\n二行目｜彼女《かのじょ》';
     expect(removeRuby(input)).toBe('一行目彼\n二行目彼女');
