@@ -172,7 +172,7 @@ pnpm install
 │   ├── convertGaiji.ts
 │   ├── chunkText.ts
 │   └── index.ts
-├── tests/                       # テストは src/ と分離
+├── tests/
 │   └── *.test.ts
 └── ...
 ```
