@@ -1,7 +1,7 @@
 export type AozoraSections = {
   /** タイトル・著者・凡例ブロック */
   header: string;
-  /** 本文（前後トリム済み） */
+  /** 本文 */
   body: string;
   /** 「底本：」以降の書誌情報 */
   footer: string;
@@ -14,7 +14,7 @@ export type AozoraSections = {
  *   （凡例ブロックの開始と終わりの2本のハイフン行を検出する）
  * - フッター: 「底本：」で始まる行以降
  * - 確実に判定できない部分は空文字を返し、内容は本文側に残す
- * - body のみ前後の空白がトリムされる
+ * - 各セクションは前後の空白がトリムされる
  */
 export function splitSections(text: string): AozoraSections {
   const hyphenLines = [...text.matchAll(/^-{3,}$/gm)];
@@ -28,8 +28,8 @@ export function splitSections(text: string): AozoraSections {
   const safeHeaderEnd = headerEnd <= footerStart ? headerEnd : 0;
 
   return {
-    header: text.slice(0, safeHeaderEnd),
+    header: text.slice(0, safeHeaderEnd).trim(),
     body: text.slice(safeHeaderEnd, footerStart).trim(),
-    footer: text.slice(footerStart),
+    footer: text.slice(footerStart).trim(),
   };
 }

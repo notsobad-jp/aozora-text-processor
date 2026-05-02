@@ -22,21 +22,19 @@ describe('splitSections', () => {
 
     expect(header).toContain('こころ');
     expect(header).toContain('夏目漱石');
-    expect(
-      header.trimEnd().endsWith('-------------------------------------------------------'),
-    ).toBe(true);
+    expect(header.endsWith('-------------------------------------------------------')).toBe(true);
     expect(body).toBe('私はその人を常に先生と呼んでいた。');
-    expect(footer.startsWith('底本：')).toBe(true);
+    expect(footer).toBe('底本：「こころ」集英社文庫\n   1991（平成3）年2月25日第1刷発行');
   });
 
   it('returns empty header when 凡例 block is absent', () => {
     const input = ['短編作品の本文。', '', '底本：底本情報'].join('\n');
 
-    const { header, body, footer } = splitSections(input);
-
-    expect(header).toBe('');
-    expect(body).toBe('短編作品の本文。');
-    expect(footer.startsWith('底本：')).toBe(true);
+    expect(splitSections(input)).toEqual({
+      header: '',
+      body: '短編作品の本文。',
+      footer: '底本：底本情報',
+    });
   });
 
   it('returns empty header when only one ---...--- line is present', () => {
@@ -46,20 +44,22 @@ describe('splitSections', () => {
       '本文',
     ].join('\n');
 
-    expect(splitSections(input).header).toBe('');
+    expect(splitSections(input)).toEqual({
+      header: '',
+      body: input,
+      footer: '',
+    });
   });
 
   it('returns empty footer when 底本: line is absent', () => {
-    const input = ['本文だけのテキスト。'].join('\n');
-
-    const { header, body, footer } = splitSections(input);
-
-    expect(header).toBe('');
-    expect(body).toBe('本文だけのテキスト。');
-    expect(footer).toBe('');
+    expect(splitSections('本文だけのテキスト。')).toEqual({
+      header: '',
+      body: '本文だけのテキスト。',
+      footer: '',
+    });
   });
 
-  it('trims leading and trailing whitespace from body only', () => {
+  it('trims surrounding whitespace from each section', () => {
     const input = [
       '-------------------------------------------------------',
       '凡例',
@@ -72,10 +72,12 @@ describe('splitSections', () => {
       '底本：foo',
     ].join('\n');
 
-    const { body, footer } = splitSections(input);
-
-    expect(body).toBe('本文。');
-    expect(footer).toBe('底本：foo');
+    expect(splitSections(input)).toEqual({
+      header:
+        '-------------------------------------------------------\n凡例\n-------------------------------------------------------',
+      body: '本文。',
+      footer: '底本：foo',
+    });
   });
 
   it('returns empty header and footer for plain text', () => {
