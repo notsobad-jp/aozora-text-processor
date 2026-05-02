@@ -1,7 +1,7 @@
 import { split } from 'sentence-splitter';
 
 export type ChunkTextOptions = {
-  /** 各チャンクの最終文を次のチャンクの先頭にも含める @default false */
+  /** 各チャンクの最終文を次のチャンクの先頭にも含める @default true */
   overlapLastSentence?: boolean;
 };
 
@@ -35,12 +35,9 @@ export function chunkText(text: string, count: number, options: ChunkTextOptions
   chunks.push(text.slice(start));
   while (chunks.length < count) chunks.push('');
 
-  if (options.overlapLastSentence) {
-    return chunks.map((chunk, i) =>
-      i === 0 ? chunk : lastSentenceOf(chunks[i - 1] ?? '') + chunk,
-    );
-  }
-  return chunks;
+  const overlap = options.overlapLastSentence ?? true;
+  if (!overlap) return chunks;
+  return chunks.map((chunk, i) => (i === 0 ? chunk : lastSentenceOf(chunks[i - 1] ?? '') + chunk));
 }
 
 /**

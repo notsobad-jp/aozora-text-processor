@@ -9,7 +9,7 @@ describe('chunkText', () => {
 
   it('splits at sentence boundaries and returns the requested number of chunks', () => {
     const text = '一文目。二文目。三文目。四文目。五文目。六文目。';
-    const chunks = chunkText(text, 3);
+    const chunks = chunkText(text, 3, { overlapLastSentence: false });
 
     expect(chunks).toHaveLength(3);
     expect(chunks.join('')).toBe(text);
@@ -32,7 +32,7 @@ describe('chunkText', () => {
       '短文七。',
     ];
     const text = sentences.join('');
-    const [first, second] = chunkText(text, 2);
+    const [first, second] = chunkText(text, 2, { overlapLastSentence: false });
 
     expect(first).toBe('短文一。短文二。短文三。');
     expect(second).toBe(`${'長'.repeat(58)}。短文五。短文六。短文七。`);
@@ -40,7 +40,7 @@ describe('chunkText', () => {
 
   it('force-cuts a single sentence longer than 1.5x the target chunk size', () => {
     const longSentence = `${'あ'.repeat(300)}。`;
-    const chunks = chunkText(longSentence, 3);
+    const chunks = chunkText(longSentence, 3, { overlapLastSentence: false });
 
     expect(chunks).toHaveLength(3);
     expect(chunks.join('')).toBe(longSentence);
@@ -51,9 +51,9 @@ describe('chunkText', () => {
     }
   });
 
-  it('prepends the previous chunk last sentence when overlapLastSentence is true', () => {
+  it('prepends the previous chunk last sentence by default', () => {
     const text = '一文目。二文目。三文目。四文目。';
-    const [a, b] = chunkText(text, 2, { overlapLastSentence: true });
+    const [a, b] = chunkText(text, 2);
 
     expect(a).toBe('一文目。二文目。');
     expect(b).toBe('二文目。三文目。四文目。');
