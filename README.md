@@ -172,6 +172,8 @@ pnpm install
 │   ├── convertGaiji.ts
 │   ├── chunkText.ts
 │   └── index.ts
+├── tests/
+│   └── *.test.ts
 └── ...
 ```
 
