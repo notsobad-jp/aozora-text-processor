@@ -1,5 +1,5 @@
 {
-  "name": "aozora-text-processor",
+  "name": "@notsobad/aozora-text-processor",
   "version": "0.1.0",
   "description": "青空文庫テキストを整形するためのユーティリティ集（ルビ除去、注記除去、外字変換、文章分割）",
   "type": "module",
@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "prepublishOnly": "pnpm lint && pnpm test && pnpm build"
   },
   "keywords": [
     "aozora",
@@ -32,6 +33,17 @@
   ],
   "author": "NOT SO BAD",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/notsobad-jp/aozora-text-processor.git"
+  },
+  "homepage": "https://github.com/notsobad-jp/aozora-text-processor#readme",
+  "bugs": {
+    "url": "https://github.com/notsobad-jp/aozora-text-processor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
