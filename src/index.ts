@@ -1,1 +1,1 @@
-export {};
+export { removeRuby } from './removeRuby.js';
