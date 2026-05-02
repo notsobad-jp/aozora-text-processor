@@ -15,9 +15,9 @@
 ## Installation
 
 ```sh
-pnpm add aozora-text-processor
+pnpm add @notsobad/aozora-text-processor
 # or
-npm install aozora-text-processor
+npm install @notsobad/aozora-text-processor
 ```
 
 Node.js 18 以上、ESM のみサポート。
@@ -31,7 +31,7 @@ import {
   removeAnnotations,
   convertGaiji,
   chunkText,
-} from 'aozora-text-processor';
+} from '@notsobad/aozora-text-processor';
 
 const { header, body, footer } = splitSections(rawText);
 const text = removeAnnotations(removeRuby(convertGaiji(body)));
