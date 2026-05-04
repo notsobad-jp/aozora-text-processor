@@ -9,7 +9,7 @@
 - **`splitSections`** — テキストをヘッダー・本文・フッターに分割
 - **`removeRuby`** — ルビ記法 `《...》` と開始記号 `｜` を除去
 - **`removeAnnotations`** — 入力者注記 `［＃...］` を除去（外字注記はスキップ）
-- **`convertGaiji`** — JIS X 0213 第3・第4水準漢字の外字注記を Unicode に変換
+- **`convertGaiji`** — JIS X 0213、Unicode 指定、字形描写の外字注記を Unicode に変換
 - **`chunkText`** — テキストを文単位で指定数のチャンクに分割
 
 ## Installation
@@ -105,15 +105,16 @@ removeAnnotations('彼［＃「彼」に傍点］は走った。');
 | JIS第3水準 | `※［＃「てへん＋劣」、第3水準1-84-77］` | JIS X 0213 マッピングで Unicode に変換 |
 | JIS第4水準 | `※［＃「字形」、第4水準2-XX-XX］` | 同上 |
 | Unicode指定 | `※［＃「字形」、U+XXXX、ページ-行］` | U+XXXX をそのまま Unicode 文字に |
-| Unicode未収録 | `※［＃「字形」、ページ-行］` | 変換不能、元の注記をそのまま残す |
-| 字形描写のみ | `※［＃「水＋(尤－尢)」］` | スコープ外、そのまま残す |
+| 字形描写のみ | `※［＃「てへん＋劣」］` | 青空文庫の外字注記辞書から生成した表で Unicode に変換 |
+| ページ-行のみ | `※［＃「てへん＋劣」、123-下-5］` | 字形描写が表にあれば Unicode に変換 |
+| Unicode未収録 | `※［＃「字形」、ページ-行］` | 表にない、または衝突する字形描写は元の注記をそのまま残す |
 
 ```ts
 convertGaiji('※［＃「てへん＋劣」、第3水準1-84-77］');
 // → '挘'
 ```
 
-マッピング表は [Project X0213](https://x0213.org/) の `jisx0213-2004-std.txt` を元にビルド時に生成しており、ライブラリにバンドルされます。
+マッピング表は [Project X0213](https://x0213.org/) の `jisx0213-2004-std.txt` と、青空文庫の外字注記辞書 PDF を元に生成しており、ライブラリにバンドルされます。
 
 ### `chunkText(text, count, options?): string[]`
 
@@ -152,6 +153,7 @@ pnpm install
 | `pnpm test:watch` | テストの watch モード |
 | `pnpm build` | ライブラリをビルド（ESM + 型定義） |
 | `pnpm build:gaiji-table` | 外字マッピングテーブルを再生成 |
+| `pnpm build:gaiji-shape-table` | 字形描写マッピングテーブルを再生成 |
 | `pnpm lint` | Biome で lint |
 | `pnpm format` | Biome で format |
 
@@ -160,10 +162,12 @@ pnpm install
 ```
 .
 ├── scripts/
-│   └── build-gaiji-table.ts     # Project X0213 の txt をリモートから取得して TS const に変換
+│   ├── build-gaiji-table.ts       # Project X0213 の txt を TS const に変換
+│   └── build-gaiji-shape-table.ts # 青空文庫の外字注記辞書 PDF を TS const に変換
 ├── src/
 │   ├── data/
-│   │   └── gaiji-table.ts       # 自動生成、コミット、配布物に含む
+│   │   ├── gaiji-table.ts       # 自動生成、コミット、配布物に含む
+│   │   └── gaiji-shape-table.ts # 自動生成、コミット、配布物に含む
 │   ├── splitSections.ts
 │   ├── removeRuby.ts
 │   ├── removeAnnotations.ts
@@ -178,6 +182,8 @@ pnpm install
 ## データ・ライセンス
 
 JIS X 0213 と Unicode の対応表は [Project X0213](https://x0213.org/) が公開している `jisx0213-2004-std.txt` を利用しています（自由に利用・改変・再配布可）。
+
+字形描写の対応表は [青空文庫・外字注記辞書](https://www.aozora.gr.jp/gaiji_chuki/) を元に生成しています。
 
 ## License
 
