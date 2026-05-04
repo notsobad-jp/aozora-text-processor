@@ -18,6 +18,18 @@ describe('convertGaiji', () => {
     expect(convertGaiji('※［＃「漢」、U+6F22、123-下-5］')).toBe('漢');
   });
 
+  it('converts shape-only annotation via Aozora gaiji shape table', () => {
+    expect(convertGaiji('※［＃「てへん＋劣」］')).toBe('挘');
+  });
+
+  it('converts page-line-only annotation via Aozora gaiji shape table', () => {
+    expect(convertGaiji('※［＃「てへん＋劣」、123-下-5］')).toBe('挘');
+  });
+
+  it('converts shape descriptions with text outside the first quote', () => {
+    expect(convertGaiji('※［＃「柳の本字」のつくり］')).toBe('丣');
+  });
+
   it('returns multi-codepoint sequence for entries with combining characters', () => {
     const result = convertGaiji('※［＃「半濁点付きか」、第3水準1-4-87］');
     expect(result).toBe('か゚');
@@ -25,15 +37,20 @@ describe('convertGaiji', () => {
   });
 
   it('leaves annotation unchanged when JIS code is not in mapping table', () => {
-    const input = '※［＃「字形」、第3水準1-99-99］';
+    const input = '※［＃「てへん＋劣」、第3水準1-99-99］';
     expect(convertGaiji(input)).toBe(input);
   });
 
-  it('leaves annotation unchanged when neither JIS nor U+ is specified', () => {
+  it('leaves annotation unchanged when shape description is not in mapping table', () => {
     expect(convertGaiji('※［＃「水＋(尤－尢)」、123-下-5］')).toBe(
       '※［＃「水＋(尤－尢)」、123-下-5］',
     );
     expect(convertGaiji('※［＃「水＋(尤－尢)」］')).toBe('※［＃「水＋(尤－尢)」］');
+  });
+
+  it('leaves conflicting shape descriptions unchanged', () => {
+    const input = '※［＃「さんずい＋（西／土）」］';
+    expect(convertGaiji(input)).toBe(input);
   });
 
   it('converts multiple annotations within a single text', () => {
