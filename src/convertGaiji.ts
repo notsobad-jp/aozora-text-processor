@@ -1,5 +1,5 @@
-import { gaijiShapeTable } from './data/gaiji-shape-table.js';
-import { gaijiTable } from './data/gaiji-table.js';
+import { gaijiShapeTable } from './data/gaiji-shape-table.ts';
+import { gaijiTable } from './data/gaiji-table.ts';
 
 const ANNOTATION_PATTERN = /※［＃[^］]*］/g;
 const JIS_PATTERN = /第[34]水準(\d)-(\d+)-(\d+)/;

@@ -22,6 +22,19 @@ npm install @notsobad/aozora-text-processor
 
 Node.js 18 以上、ESM のみサポート。
 
+Deno では `src/index.ts` をコミット SHA で固定して読み込めます。ルートの `deno.json` の `imports` に、ライブラリの URL と依存を定義します。
+
+```json
+{
+  "imports": {
+    "@notsobad/aozora-text-processor": "https://raw.githubusercontent.com/notsobad-jp/aozora-text-processor/<コミットSHA>/src/index.ts",
+    "sentence-splitter": "npm:sentence-splitter@5.0.1"
+  }
+}
+```
+
+`sentence-splitter` がデバッグ設定を読むため、実行・テスト時に `--allow-env=DEBUG` を指定します。本文加工には外部通信は不要です。
+
 ## Usage
 
 ```ts
@@ -129,8 +142,16 @@ type ChunkTextOptions = {
 挙動：
 
 - 文境界（[sentence-splitter](https://www.npmjs.com/package/sentence-splitter) を利用）で区切ります
-- 各チャンクの文字数ができるだけ揃うよう、全体最適で境界を決めます（Balanced 方式）
-- 1文がチャンクの目標サイズを大きく超える場合、文字数で強制カットします
+- 各チャンクの書記素数ができるだけ揃うよう、目標位置に近い境界を順に選びます（Balanced 方式）
+- 書記素は、結合文字や絵文字の連なりを含む、見た目の1文字を表す単位です。`Intl.Segmenter` で判定し、その途中では分割しません
+- 1文がチャンクの目標サイズを大きく超える場合や、文境界だけでは指定件数に足りない場合は、書記素境界で分割します
+- 空文字、正の整数でない `count`、本文の書記素数を超える `count` は `Error` にします。空文字による補完は行いません
+
+```ts
+chunkText('短文', 2); // → ['短', '短文']（既定の末尾文の重複を含む）
+chunkText('短文', 3); // → Error
+chunkText('', 1); // → Error
+```
 
 ## Development
 

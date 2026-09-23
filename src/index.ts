@@ -1,5 +1,5 @@
-export { chunkText, type ChunkTextOptions } from './chunkText.js';
-export { convertGaiji } from './convertGaiji.js';
-export { removeAnnotations, type RemoveAnnotationsOptions } from './removeAnnotations.js';
-export { removeRuby } from './removeRuby.js';
-export { splitSections, type AozoraSections } from './splitSections.js';
+export { chunkText, type ChunkTextOptions } from './chunkText.ts';
+export { convertGaiji } from './convertGaiji.ts';
+export { removeAnnotations, type RemoveAnnotationsOptions } from './removeAnnotations.ts';
+export { removeRuby } from './removeRuby.ts';
+export { splitSections, type AozoraSections } from './splitSections.ts';
