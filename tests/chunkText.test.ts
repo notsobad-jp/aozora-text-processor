@@ -59,8 +59,72 @@ describe('chunkText', () => {
     expect(b).toBe('二文目。三文目。四文目。');
   });
 
-  it('returns N empty chunks for empty input', () => {
-    expect(chunkText('', 3)).toEqual(['', '', '']);
+  it('rejects empty input even for a single chunk', () => {
+    expect(() => chunkText('', 1)).toThrow('text must not be empty');
+    expect(() => chunkText('', 3)).toThrow('text must not be empty');
+  });
+
+  it('rejects a count greater than the number of graphemes without padding', () => {
+    for (const text of ['短文', '😀', 'か\u3099', '👨‍👩‍👧‍👦']) {
+      expect(() => chunkText(text, 3)).toThrow('count must not exceed the number of graphemes');
+    }
+  });
+
+  it('fills missing sentence boundaries without producing empty chunks', () => {
+    const text = 'あ。い。う。';
+    const chunks = chunkText(text, 4, { overlapLastSentence: false });
+    expect(chunks).toHaveLength(4);
+    expect(chunks.every((chunk) => chunk.length > 0)).toBe(true);
+    expect(chunks.join('')).toBe(text);
+  });
+
+  it('splits short text up to one grapheme per chunk and keeps the default overlap', () => {
+    expect(chunkText('短文', 2)).toEqual(['短', '短文']);
+    expect(chunkText('短文', 2, { overlapLastSentence: false })).toEqual(['短', '文']);
+  });
+
+  it('preserves surrogate pairs, combining marks, variation selectors and emoji sequences', () => {
+    const graphemes = ['あ', '😀', 'か\u3099', '𠮷', '👨‍👩‍👧‍👦', '✌️', '🇯🇵', 'い'];
+    const text = graphemes.join('');
+    const segmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+    for (let count = 1; count <= graphemes.length; count++) {
+      const chunks = chunkText(text, count, { overlapLastSentence: false });
+      expect(chunks).toHaveLength(count);
+      expect(chunks.every((chunk) => chunk.length > 0)).toBe(true);
+      expect(chunks.join('')).toBe(text);
+      expect(
+        chunks.flatMap((chunk) => [...segmenter.segment(chunk)].map((s) => s.segment)),
+      ).toEqual(graphemes);
+      for (const chunk of chunkText(text, count)) {
+        expect([...segmenter.segment(chunk)].every((s) => graphemes.includes(s.segment))).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('returns 365 nonempty chunks in order', () => {
+    const sentences = Array.from(
+      { length: 365 },
+      (_, i) => `第${String(i + 1).padStart(3, '0')}日。`,
+    );
+    const chunks = chunkText(sentences.join(''), 365);
+    expect(chunks).toEqual(
+      sentences.map((sentence, i) => (i === 0 ? sentence : sentences[i - 1] + sentence)),
+    );
+  });
+
+  it('keeps combining marks with punctuation when repeating the last sentence', () => {
+    const text = 'あ。\u0301い。う。え。';
+    const segmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+    const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
+    for (const count of [2, 3, 4]) {
+      for (const chunk of chunkText(text, count)) {
+        expect([...segmenter.segment(chunk)].every((s) => graphemes.includes(s.segment))).toBe(
+          true,
+        );
+      }
+    }
   });
 
   it('throws when count is not a positive integer', () => {

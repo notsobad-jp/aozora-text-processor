@@ -6,34 +6,49 @@ export type ChunkTextOptions = {
 };
 
 const FORCE_CUT_THRESHOLD = 1.5;
+const graphemeSegmenter = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 
 /**
  * テキストを文単位で指定数のチャンクに分割する。
  *
  * - 文境界の判定は sentence-splitter を利用
  * - 各チャンクの境界は「目標位置に最も近い文境界」を選んで全体を均等化（Balanced 方式）
- * - 1文がチャンクの目標サイズを大きく超える場合、文字数で強制カット
+ * - 1文がチャンクの目標サイズを大きく超える場合、書記素境界で強制カット
+ * - 空文字や、書記素数より多い分割数は拒否し、空のチャンクを作らない
  * - `overlapLastSentence: true` のとき、各チャンクの最終文を次のチャンクの先頭にも複製
  */
 export function chunkText(text: string, count: number, options: ChunkTextOptions = {}): string[] {
   if (!Number.isInteger(count) || count < 1) {
     throw new Error('count must be a positive integer');
   }
+  if (text.length === 0) throw new Error('text must not be empty');
   if (count === 1) return [text];
-  if (text.length === 0) return Array.from({ length: count }, () => '');
 
-  const target = text.length / count;
-  const candidates = collectBreakCandidates(text, target);
-  const chosen = pickBalancedBreaks(candidates, text.length, count);
+  const boundaries: number[] = [];
+  for (const { index } of graphemeSegmenter.segment(text)) {
+    boundaries.push(index);
+  }
+  boundaries.push(text.length);
+  const length = boundaries.length - 1;
+  if (count > length) throw new Error('count must not exceed the number of graphemes');
+
+  const target = length / count;
+  let candidates = collectBreakCandidates(text, boundaries, target);
+  // 文境界だけで件数を満たせないときも、書記素を壊さず本文全体を分配する。
+  if (candidates.length < count - 1) {
+    candidates = Array.from({ length: length - 1 }, (_, i) => i + 1);
+  }
+  const chosen = pickBalancedBreaks(candidates, length, count);
 
   const chunks: string[] = [];
   let start = 0;
-  for (const end of chosen) {
+  for (const position of chosen) {
+    const end = boundaries[position];
+    if (end === undefined) throw new Error('invalid grapheme boundary');
     chunks.push(text.slice(start, end));
     start = end;
   }
   chunks.push(text.slice(start));
-  while (chunks.length < count) chunks.push('');
 
   const overlap = options.overlapLastSentence ?? true;
   if (!overlap) return chunks;
@@ -42,17 +57,21 @@ export function chunkText(text: string, count: number, options: ChunkTextOptions
 
 /**
  * 文末位置を break 候補として収集し、目標サイズの 1.5 倍を超える区間には
- * 文字数ベースの強制カット位置を挟む。
+ * 書記素数ベースの強制カット位置を挟む。
  */
-function collectBreakCandidates(text: string, target: number): number[] {
-  const sentenceEnds: number[] = [];
+function collectBreakCandidates(text: string, boundaries: number[], target: number): number[] {
+  const sentenceEnds = new Set<number>();
   for (const node of split(text)) {
-    if (node.type === 'Sentence') sentenceEnds.push(node.range[1]);
+    if (node.type === 'Sentence') sentenceEnds.add(node.range[1]);
   }
+  const length = boundaries.length - 1;
+  const ends = boundaries.flatMap((offset, i) =>
+    i > 0 && i < length && sentenceEnds.has(offset) ? [i] : [],
+  );
 
   const breaks: number[] = [];
   let prev = 0;
-  for (const end of [...sentenceEnds, text.length]) {
+  for (const end of [...ends, length]) {
     const segLen = end - prev;
     if (segLen > target * FORCE_CUT_THRESHOLD) {
       const numPieces = Math.ceil(segLen / target);
@@ -61,11 +80,11 @@ function collectBreakCandidates(text: string, target: number): number[] {
         if (cut > prev && cut < end) breaks.push(cut);
       }
     }
-    if (end < text.length) breaks.push(end);
+    if (end < length) breaks.push(end);
     prev = end;
   }
 
-  return [...new Set(breaks)].sort((a, b) => a - b).filter((b) => b > 0 && b < text.length);
+  return [...new Set(breaks)].sort((a, b) => a - b).filter((b) => b > 0 && b < length);
 }
 
 /**
@@ -110,7 +129,14 @@ function lastSentenceOf(text: string): string {
   const nodes = split(text);
   for (let i = nodes.length - 1; i >= 0; i--) {
     const node = nodes[i];
-    if (node?.type === 'Sentence') return node.raw;
+    if (node?.type === 'Sentence') {
+      // 文境界が結合文字の途中にある場合も、重複させる範囲は書記素全体を含める。
+      const segments = graphemeSegmenter.segment(text);
+      const start = segments.containing(node.range[0])?.index ?? node.range[0];
+      const last = segments.containing(node.range[1] - 1);
+      const end = last === undefined ? node.range[1] : last.index + last.segment.length;
+      return text.slice(start, end);
+    }
   }
   return '';
 }
