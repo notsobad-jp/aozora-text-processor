@@ -10,7 +10,7 @@
 - **`removeRuby`** — ルビ記法 `《...》` と開始記号 `｜` を除去
 - **`removeAnnotations`** — 入力者注記 `［＃...］` を除去（外字注記はスキップ）
 - **`convertGaiji`** — JIS X 0213、Unicode 指定、字形描写の外字注記を Unicode に変換
-- **`addSentenceNewlines`** — 元の空白・改行を保ち、文間に改行を追加
+- **`addExtraLineBreaks`** — 元の空白・改行を保ち、文間に改行を追加
 - **`chunkText`** — テキストを文単位で指定数のチャンクに分割
 
 ## Installation
@@ -31,14 +31,14 @@ import {
   removeRuby,
   removeAnnotations,
   convertGaiji,
-  addSentenceNewlines,
+  addExtraLineBreaks,
   chunkText,
 } from '@notsobad/aozora-text-processor';
 
 const { header, body, footer } = splitSections(rawText);
 const text = removeAnnotations(removeRuby(convertGaiji(body)));
 const texts = chunkText(text, 5);
-const formattedTexts = texts.map(addSentenceNewlines);
+const formattedTexts = texts.map(addExtraLineBreaks);
 ```
 
 ## API
@@ -119,15 +119,15 @@ convertGaiji('※［＃「てへん＋劣」、第3水準1-84-77］');
 
 マッピング表は [Project X0213](https://x0213.org/) の `jisx0213-2004-std.txt` と、青空文庫の外字注記辞書 PDF を元に生成しており、ライブラリにバンドルされます。
 
-### `addSentenceNewlines(text: string): string`
+### `addExtraLineBreaks(text: string): string`
 
 文間に改行を1つ挿入します。元の空白・改行は残るため、既に改行されている文間には空白行ができます。
 
 ```ts
-addSentenceNewlines('甲。乙。\n丙。');
+addExtraLineBreaks('甲。乙。\n丙。');
 // → '甲。\n乙。\n\n丙。'
 
-addSentenceNewlines('甲。\n\n乙。');
+addExtraLineBreaks('甲。\n\n乙。');
 // → '甲。\n\n\n乙。'
 ```
 
@@ -136,10 +136,10 @@ addSentenceNewlines('甲。\n\n乙。');
 会話文だけの連続も、分割器が一文とみなす範囲は保持します。
 
 ```ts
-addSentenceNewlines('彼は「甲。乙。」と言った。丙。');
+addExtraLineBreaks('彼は「甲。乙。」と言った。丙。');
 // → '彼は「甲。乙。」と言った。\n丙。'
 
-addSentenceNewlines('「甲。」\n「乙。」');
+addExtraLineBreaks('「甲。」\n「乙。」');
 // → '「甲。」\n「乙。」'
 ```
 
@@ -148,7 +148,7 @@ addSentenceNewlines('「甲。」\n「乙。」');
 追加する改行は、入力で最初に現れる改行コード（CRLF・LF・CR）を使います。入力に改行がなければLFを使い、元の改行コードは変換しません。
 
 ```ts
-addSentenceNewlines('甲。\r\n乙。');
+addExtraLineBreaks('甲。\r\n乙。');
 // → '甲。\r\n\r\n乙。'
 ```
 
@@ -211,7 +211,7 @@ pnpm install
 │   ├── removeRuby.ts
 │   ├── removeAnnotations.ts
 │   ├── convertGaiji.ts
-│   ├── addSentenceNewlines.ts
+│   ├── addExtraLineBreaks.ts
 │   ├── chunkText.ts
 │   └── index.ts
 ├── tests/

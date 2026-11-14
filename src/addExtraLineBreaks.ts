@@ -6,7 +6,7 @@ import { split } from 'sentence-splitter';
  * 追加する改行は入力で最初に現れる改行コード（なければ LF）を使う。
  * 呼び出すたびに改行を追加するため、繰り返し適用すると空白行が増える。
  */
-export function addSentenceNewlines(text: string): string {
+export function addExtraLineBreaks(text: string): string {
   const sentences = split(text).filter((node) => node.type === 'Sentence');
   if (sentences.length < 2) return text;
 
