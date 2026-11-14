@@ -2,7 +2,7 @@
 
 青空文庫のテキストを整形するためのユーティリティ集。
 
-ルビ除去、外字注記の Unicode 変換、各種注記の除去、文章単位の分割、指定数チャンクへの均等分割などを、独立した関数として提供します。
+ルビ除去、外字注記の Unicode 変換、各種注記の除去、文間への改行追加、指定数チャンクへの均等分割などを、独立した関数として提供します。
 
 ## Features
 
@@ -10,6 +10,7 @@
 - **`removeRuby`** — ルビ記法 `《...》` と開始記号 `｜` を除去
 - **`removeAnnotations`** — 入力者注記 `［＃...］` を除去（外字注記はスキップ）
 - **`convertGaiji`** — JIS X 0213、Unicode 指定、字形描写の外字注記を Unicode に変換
+- **`addSentenceNewlines`** — 元の空白・改行を保ち、文間に改行を追加
 - **`chunkText`** — テキストを文単位で指定数のチャンクに分割
 
 ## Installation
@@ -30,12 +31,14 @@ import {
   removeRuby,
   removeAnnotations,
   convertGaiji,
+  addSentenceNewlines,
   chunkText,
 } from '@notsobad/aozora-text-processor';
 
 const { header, body, footer } = splitSections(rawText);
 const text = removeAnnotations(removeRuby(convertGaiji(body)));
 const texts = chunkText(text, 5);
+const formattedTexts = texts.map(addSentenceNewlines);
 ```
 
 ## API
@@ -116,6 +119,42 @@ convertGaiji('※［＃「てへん＋劣」、第3水準1-84-77］');
 
 マッピング表は [Project X0213](https://x0213.org/) の `jisx0213-2004-std.txt` と、青空文庫の外字注記辞書 PDF を元に生成しており、ライブラリにバンドルされます。
 
+### `addSentenceNewlines(text: string): string`
+
+文間に改行を1つ挿入します。元の空白・改行は残るため、既に改行されている文間には空白行ができます。
+
+```ts
+addSentenceNewlines('甲。乙。\n丙。');
+// → '甲。\n乙。\n\n丙。'
+
+addSentenceNewlines('甲。\n\n乙。');
+// → '甲。\n\n\n乙。'
+```
+
+文境界は `chunkText` と同じ [sentence-splitter](https://github.com/textlint-rule/sentence-splitter) の判定に従います。
+句点・疑問符・感嘆符などで区切り、引用・括弧内の句点では分割しません。閉じ括弧を会話文から切り離すこともありません。
+会話文だけの連続も、分割器が一文とみなす範囲は保持します。
+
+```ts
+addSentenceNewlines('彼は「甲。乙。」と言った。丙。');
+// → '彼は「甲。乙。」と言った。\n丙。'
+
+addSentenceNewlines('「甲。」\n「乙。」');
+// → '「甲。」\n「乙。」'
+```
+
+最後の文の後には改行を追加しません。先頭・末尾の空白や改行、文中の折り返しも保持します。
+空文字や文が1つの入力はそのまま返します。
+追加する改行は、入力で最初に現れる改行コード（CRLF・LF・CR）を使います。入力に改行がなければLFを使い、元の改行コードは変換しません。
+
+```ts
+addSentenceNewlines('甲。\r\n乙。');
+// → '甲。\r\n\r\n乙。'
+```
+
+呼び出すたびに改行を追加するため、表示用テキストの生成時に1回適用してください。
+青空文庫の注記・ルビを除去し、外字を変換する場合は、Usageの例の順序で各関数を呼び出してください。
+
 ### `chunkText(text, count, options?): string[]`
 
 テキストを指定数のチャンクに文単位で分割します。
@@ -172,6 +211,7 @@ pnpm install
 │   ├── removeRuby.ts
 │   ├── removeAnnotations.ts
 │   ├── convertGaiji.ts
+│   ├── addSentenceNewlines.ts
 │   ├── chunkText.ts
 │   └── index.ts
 ├── tests/
