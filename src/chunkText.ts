@@ -1,116 +1,203 @@
-import { split } from 'sentence-splitter';
+import { convertGaiji } from './convertGaiji.js';
+import { findMarkup } from './rubyMarkup.js';
 
 export type ChunkTextOptions = {
-  /** 各チャンクの最終文を次のチャンクの先頭にも含める @default true */
+  /** 文末で分けた場合、最後の一文を次の回の冒頭に重ねる @default true */
   overlapLastSentence?: boolean;
 };
 
-const FORCE_CUT_THRESHOLD = 1.5;
+const graphemes = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+const closingBracket = /^[」』）)】〉》〕］\]〗〙〛”’]$/u;
+const trailingCloser = /(?:※［＃[^］\r\n]*］|[」』）)】〉》〕］\]〗〙〛”’])\s*$/u;
+const lineEnding = /[\r\n]/u;
+const MAX_CONTEXT_LENGTH = 40;
 
-/**
- * テキストを文単位で指定数のチャンクに分割する。
- *
- * - 文境界の判定は sentence-splitter を利用
- * - 各チャンクの境界は「目標位置に最も近い文境界」を選んで全体を均等化（Balanced 方式）
- * - 1文がチャンクの目標サイズを大きく超える場合、文字数で強制カット
- * - `overlapLastSentence: true` のとき、各チャンクの最終文を次のチャンクの先頭にも複製
- */
+/** 各回に新規本文が入るよう分割し、文中で分けた箇所は … と既読の文脈で示す。 */
 export function chunkText(text: string, count: number, options: ChunkTextOptions = {}): string[] {
-  if (!Number.isInteger(count) || count < 1) {
-    throw new Error('count must be a positive integer');
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new RangeError('count must be a positive integer');
   }
+  const { offsets, weights, sentenceEnds } = collectBoundaries(text);
+  const last = offsets.length - 1;
+  if (last < count) throw new RangeError('Text cannot be split into the requested count');
   if (count === 1) return [text];
-  if (text.length === 0) return Array.from({ length: count }, () => '');
 
-  const target = text.length / count;
-  const candidates = collectBreakCandidates(text, target);
-  const chosen = pickBalancedBreaks(candidates, text.length, count);
-
-  const chunks: string[] = [];
+  const weightAt = (boundary: number) => weights[boundary] ?? 0;
+  const total = weightAt(last);
+  const chosen = [0];
   let start = 0;
-  for (const end of chosen) {
-    chunks.push(text.slice(start, end));
-    start = end;
+  for (let part = 1; part < count; part++) {
+    const largest = last - (count - part);
+    const goal = (total * part) / count;
+    // 句点に寄せるのは、この回の新規本文が基準の 0.5〜1.5 回分に収まるとき。
+    const minimum = weightAt(start) + total / (2 * count);
+    const maximum = weightAt(start) + (3 * total) / (2 * count);
+    const sentenceAt = (index: number) => sentenceEnds[index] ?? 0;
+    const nearestSentence = nearestBoundary(
+      lowerBound(
+        sentenceEnds.length,
+        (i) => sentenceAt(i) > start && weightAt(sentenceAt(i)) >= minimum,
+      ),
+      lowerBound(
+        sentenceEnds.length,
+        (i) => sentenceAt(i) > largest || weightAt(sentenceAt(i)) > maximum,
+      ),
+      goal,
+      (i) => weightAt(sentenceAt(i)),
+    );
+    start =
+      nearestSentence === undefined
+        ? (nearestBoundary(start + 1, largest + 1, goal, weightAt) ?? largest)
+        : sentenceAt(nearestSentence);
+    chosen.push(start);
   }
-  chunks.push(text.slice(start));
-  while (chunks.length < count) chunks.push('');
+  chosen.push(last);
 
-  const overlap = options.overlapLastSentence ?? true;
-  if (!overlap) return chunks;
-  return chunks.map((chunk, i) => (i === 0 ? chunk : lastSentenceOf(chunks[i - 1] ?? '') + chunk));
+  const atSentenceEnd = new Set(sentenceEnds);
+  return chosen.slice(0, -1).map((start, index) => {
+    const end = chosen[index + 1] ?? last;
+    const previousEnd = lowerBound(sentenceEnds.length, (i) => (sentenceEnds[i] ?? 0) >= start);
+    const sentenceStart = sentenceEnds[previousEnd - 1] ?? 0;
+    let from = start;
+    let prefix = '';
+    if (start > 0 && !atSentenceEnd.has(start)) {
+      const limit = weightAt(start) - MAX_CONTEXT_LENGTH;
+      from = Math.max(
+        sentenceStart,
+        lowerBound(start, (i) => weightAt(i) >= limit),
+      );
+      if (from > sentenceStart) prefix = '…';
+    } else if (start > 0 && (options.overlapLastSentence ?? true)) {
+      from = Math.max(chosen[index - 1] ?? 0, sentenceStart);
+    }
+    const suffix = end === last || atSentenceEnd.has(end) ? '' : '…';
+    return prefix + text.slice(offsets[from], offsets[end]) + suffix;
+  });
 }
 
-/**
- * 文末位置を break 候補として収集し、目標サイズの 1.5 倍を超える区間には
- * 文字数ベースの強制カット位置を挟む。
- */
-function collectBreakCandidates(text: string, target: number): number[] {
+function collectBoundaries(text: string) {
+  const { measured, markup } = projectText(text);
+
+  const offsets = [0];
+  const weights = [0];
   const sentenceEnds: number[] = [];
-  for (const node of split(text)) {
-    if (node.type === 'Sentence') sentenceEnds.push(node.range[1]);
-  }
+  let weight = 0;
+  let followsPeriod = false;
+  let pendingSentenceEnd = false;
+  let quoteDepth = 0;
+  let outsidePeriod = -1;
+  let visibleBoundary = 0;
+  let markupIndex = 0;
+  let sourceDelta = 0;
+  let protectedStart: number | undefined;
 
-  const breaks: number[] = [];
-  let prev = 0;
-  for (const end of [...sentenceEnds, text.length]) {
-    const segLen = end - prev;
-    if (segLen > target * FORCE_CUT_THRESHOLD) {
-      const numPieces = Math.ceil(segLen / target);
-      for (let i = 1; i < numPieces; i++) {
-        const cut = prev + Math.round((segLen * i) / numPieces);
-        if (cut > prev && cut < end) breaks.push(cut);
-      }
-    }
-    if (end < text.length) breaks.push(end);
-    prev = end;
-  }
-
-  return [...new Set(breaks)].sort((a, b) => a - b).filter((b) => b > 0 && b < text.length);
-}
-
-/**
- * 各 i 番目の境界について、目標位置 i*L/count に最も近い候補を順に貪欲に選ぶ。
- * 後続の境界に必要な候補数を残せない場合はその候補を諦める。
- */
-function pickBalancedBreaks(candidates: number[], totalLen: number, count: number): number[] {
-  const chosen: number[] = [];
-  let prevPos = 0;
-  let candIdx = 0;
-
-  for (let i = 1; i < count; i++) {
-    const targetPos = (totalLen * i) / count;
-    const needed = count - 1 - i;
-
-    let bestIdx = -1;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (let j = candIdx; j < candidates.length; j++) {
-      const c = candidates[j] ?? 0;
-      if (c <= prevPos) continue;
-      if (candidates.length - j - 1 < needed) break;
-      const dist = Math.abs(c - targetPos);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestIdx = j;
-      } else {
+  for (const { index, segment } of graphemes.segment(measured)) {
+    const end = index + segment.length;
+    const newline = lineEnding.test(segment);
+    if (!newline) weight++;
+    switch (segment[0]) {
+      case '「':
+        quoteDepth++;
         break;
-      }
+      case '」':
+        quoteDepth = Math.max(0, quoteDepth - 1);
+        break;
+      case '。':
+        if (quoteDepth === 0) outsidePeriod = index;
+        break;
+    }
+    let range = markup[markupIndex];
+    while (range && range.end <= end) {
+      sourceDelta = range.sourceEnd - range.end;
+      range = markup[++markupIndex];
+    }
+    if (range && range.start < end) {
+      protectedStart ??= index;
+      continue;
     }
 
-    if (bestIdx === -1) break;
-    const pick = candidates[bestIdx] ?? 0;
-    chosen.push(pick);
-    prevPos = pick;
-    candIdx = bestIdx + 1;
+    const from = protectedStart ?? index;
+    const value = protectedStart === undefined ? segment : measured.slice(from, end);
+    protectedStart = undefined;
+    const last = offsets.length - 1;
+    const sourceEnd = end + sourceDelta;
+    if (!value.trim()) {
+      if (last > 0 && newline && visibleBoundary === from) {
+        offsets[last] = sourceEnd;
+        visibleBoundary = end;
+      }
+      continue;
+    }
+
+    const beforeClosing = withoutClosingBrackets(value);
+    if (followsPeriod && !beforeClosing) {
+      offsets[last] = sourceEnd;
+      weights[last] = weight;
+    } else {
+      if (pendingSentenceEnd) sentenceEnds.push(last);
+      offsets.push(sourceEnd);
+      weights.push(weight);
+      followsPeriod = beforeClosing.endsWith('。');
+      pendingSentenceEnd = followsPeriod && outsidePeriod === from + beforeClosing.length - 1;
+    }
+    visibleBoundary = end;
   }
 
-  return chosen;
+  offsets[offsets.length - 1] = text.length;
+  weights[weights.length - 1] = weight;
+  return { offsets, weights, sentenceEnds };
 }
 
-function lastSentenceOf(text: string): string {
-  const nodes = split(text);
-  for (let i = nodes.length - 1; i >= 0; i--) {
-    const node = nodes[i];
-    if (node?.type === 'Sentence') return node.raw;
+function withoutClosingBrackets(value: string): string {
+  let beforeClosing = value.trimEnd();
+  let closer = trailingCloser.exec(beforeClosing);
+  while (closer && closingBracket.test(convertGaiji(closer[0].trimEnd()))) {
+    beforeClosing = beforeClosing.slice(0, closer.index).trimEnd();
+    closer = trailingCloser.exec(beforeClosing);
   }
-  return '';
+  return beforeClosing;
+}
+
+// ルビの読みと開始記号を計数から外し、選んだ境界を原文の位置に戻す。
+function projectText(text: string) {
+  const markup: { start: number; end: number; sourceEnd: number }[] = [];
+  let measured = '';
+  let offset = 0;
+  for (const match of findMarkup(text)) {
+    measured += text.slice(offset, match.start);
+    const start = measured.length;
+    const source = 'note' in match ? match.note : match.parent;
+    // 残った注記は表記どおり数え、注記内の記号は本文の句読点から外す。
+    measured += source.replace(/※?［＃[^］\r\n]*］/gu, (note) =>
+      note.replace(/[「」。]/gu, '\uFFFC'),
+    );
+    markup.push({ start, end: measured.length, sourceEnd: match.end });
+    offset = match.end;
+  }
+  return { measured: measured + text.slice(offset), markup };
+}
+
+function lowerBound(length: number, atOrAbove: (index: number) => boolean): number {
+  let left = 0;
+  let right = length;
+  while (left < right) {
+    const middle = Math.floor((left + right) / 2);
+    if (atOrAbove(middle)) right = middle;
+    else left = middle + 1;
+  }
+  return left;
+}
+
+function nearestBoundary(
+  first: number,
+  afterLast: number,
+  goal: number,
+  weightAt: (index: number) => number,
+): number | undefined {
+  if (first >= afterLast) return undefined;
+
+  const next = first + lowerBound(afterLast - first, (i) => weightAt(first + i) >= goal);
+  if (next === afterLast) return next - 1;
+  if (next > first && goal - weightAt(next - 1) <= weightAt(next) - goal) return next - 1;
+  return next;
 }

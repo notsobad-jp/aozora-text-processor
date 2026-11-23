@@ -18,6 +18,25 @@ describe('convertGaiji', () => {
     expect(convertGaiji('※［＃「漢」、U+6F22、123-下-5］')).toBe('漢');
   });
 
+  it('accepts plane-cell numbers without a JIS level and restores punctuation', () => {
+    const source =
+      '※［＃二の字点、面区点番号1-2-22］※［＃歌記号、1-03-28］※［＃U+300A］語※［＃U+300B］';
+    expect(convertGaiji(source)).toBe('〻〽《語》');
+  });
+
+  it('excludes by restored character across gaiji annotation formats', () => {
+    const retained = '※［＃始め二重山括弧、1-1-52］※［＃U+300B］※［＃U+FF5C］';
+    const options = { exclude: ['《', '》', '｜'] } as const;
+    const prepared = convertGaiji(`※［＃「てへん＋劣」］${retained}※［＃不明］`, options);
+    expect(prepared).toBe(`挘${retained}※［＃不明］`);
+    expect(convertGaiji(prepared)).toBe('挘《》｜※［＃不明］');
+  });
+
+  it('preserves invalid Unicode scalar values and malformed annotations', () => {
+    const source = '※［＃U+D800］※［＃U+110000］※［＃U+300A\n］';
+    expect(convertGaiji(source)).toBe(source);
+  });
+
   it('converts shape-only annotation via Aozora gaiji shape table', () => {
     expect(convertGaiji('※［＃「てへん＋劣」］')).toBe('挘');
   });
