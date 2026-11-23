@@ -2,15 +2,7 @@
 
 青空文庫のテキストを整形するためのユーティリティ集。
 
-ルビ除去、外字注記の Unicode 変換、各種注記の除去、文章単位の分割、指定数チャンクへの均等分割などを、独立した関数として提供します。
-
-## Features
-
-- **`splitSections`** — テキストをヘッダー・本文・フッターに分割
-- **`removeRuby`** — ルビ記法 `《...》` と開始記号 `｜` を除去
-- **`removeAnnotations`** — 入力者注記 `［＃...］` を除去（外字注記はスキップ）
-- **`convertGaiji`** — JIS X 0213、Unicode 指定、字形描写の外字注記を Unicode に変換
-- **`chunkText`** — テキストを文単位で指定数のチャンクに分割
+本文の切り出し、注記の除去、外字の復元、ルビの選別、本文の分割と各回の整形を個別に行えます。
 
 ## Installation
 
@@ -26,83 +18,64 @@ Node.js 18 以上、ESM のみサポート。
 
 ```ts
 import {
-  splitSections,
-  removeRuby,
-  removeAnnotations,
+  aozoraText,
   convertGaiji,
-  chunkText,
+  deduplicateRuby,
 } from '@notsobad/aozora-text-processor';
 
-const { header, body, footer } = splitSections(rawText);
-const text = removeAnnotations(removeRuby(convertGaiji(body)));
-const texts = chunkText(text, 5);
+const contents = aozoraText(rawText)
+  .extractBody()
+  .removeEditorialAnnotations()
+  .convertGaiji({ exclude: ['《', '》', '｜'] })
+  .filterRuby()
+  .addExtraLineBreaks()
+  .chunkText(5)
+  .map((content) => deduplicateRuby(content))
+  .map((content) => convertGaiji(content));
 ```
+
+`aozoraText` は取得済みの文字列を包んでチェーンを始めます。各メソッドは同名の単独関数を使い、`chunkText` は配列 `string[]` を返します。
+
+分割前に会話の範囲を使って改行を足します。本文の記号 `《》｜` は外字注記のまま分割し、各回の重複ルビを除いてから復元すると、元の記号とルビの記法を区別できます。
 
 ## API
 
+### `extractBody(text: string): string`
+
+青空文庫の本文を切り出します。凡例の見出しと罫線が揃っていれば凡例の末尾までを除きます。行頭の `底本：` または単独行の `［＃本文終わり］` から後ろを書誌情報として除きます。本文前後の区切り空行を外し、本文の字下げ、空白、改行を保ちます。境界を確認できない部分は本文に残ります。
+
 ### `splitSections(text: string): AozoraSections`
 
-青空文庫テキストをヘッダー・本文・フッターに分割します。
+同じ境界を使い、`{ header, body, footer }` を返します。タイトルと著者名は凡例がある場合に `header` に含まれます。
+
+### `filterRuby(text: string): string`
+
+常用漢字一字の読みが音訓索引と一致すればルビを除きます。常用漢字だけの熟語は、索引に語全体の読みが明記されていればルビを残します。読みの判断がつかない場合や常用外の字を含む場合もルビを残します。削除により後続ルビの親文字が広がる場合は `｜` を補います。
 
 ```ts
-type AozoraSections = {
-  header: string; // タイトル・著者・凡例ブロック
-  body: string;   // 本文（前後トリム済み）
-  footer: string; // 「底本：」以降の書誌情報
-};
+filterRuby('学校《がっこう》今日《きょう》は宿《ヤド》に行く。');
+// → '学校｜今日《きょう》は宿に行く。'
 ```
 
-判定ルール：
+### `removeEditorialAnnotations(text: string): string`
 
-- **ヘッダー**: 冒頭から、凡例ブロックを区切る `---...---` 行までを含めた範囲
-- **フッター**: 「底本：」で始まる行以降
-- 確実に判定できない場合は分割せず、空文字を返して本文側に残します
-
-`body` は前後の空白がトリムされます。
-
-### `removeRuby(text: string): string`
-
-青空文庫のルビ記法を除去します。
-
-- `《ふりがな》` 部分を除去
-- ルビ開始マーカー `｜` も対象パターンと共に除去
-- 親文字（ルビが振られている本文）はそのまま残します
+字下げ・改ページ・傍点などの入力者注記 `［＃…］` を除きます。外字注記 `※［＃…］` と既存の改行を保ちます。
 
 ```ts
-removeRuby('私は｜彼女《かのじょ》が漢字《かんじ》を書いた');
-// → '私は彼女が漢字を書いた'
-```
-
-### `removeAnnotations(text, options?): string`
-
-青空文庫の入力者注記 `［＃...］` を除去します。
-
-```ts
-type RemoveAnnotationsOptions = {
-  skipGaiji?: boolean; // 外字注記（例: ※［＃「亻＋耳」、第3水準1-14-37］）を残すか（default: true）
-};
-```
-
-- 組版指定（`［＃ここから２字下げ］` など）、見出し、傍点、訂正、図版などすべての注記を一括削除
-- デフォルトでは外字注記（例: `※［＃「亻＋耳」、第3水準1-14-37］`）は対象外（`convertGaiji` の対象として残します）。`skipGaiji: false` を指定するとこれらも削除
-- 注記が単独で行を占めていた場合、その行の改行は残します
-
-```ts
-removeAnnotations('彼［＃「彼」に傍点］は走った。');
+removeEditorialAnnotations('彼［＃「彼」に傍点］は走った。');
 // → '彼は走った。'
 ```
 
-デフォルト挙動なら `convertGaiji` と独立して呼べるので、順序を気にする必要はありません。
+### `convertGaiji(text: string, options?: ConvertGaijiOptions): string`
 
-### `convertGaiji(text: string): string`
-
-青空文庫の外字注記を Unicode 文字に変換します。
+青空文庫の外字注記を Unicode 文字に変換します。`exclude?: readonly string[]` に指定した文字列に復元される注記は、元の表記を保ちます。
 
 対応する注記の形式：
 
 | 形式 | 例 | 動作 |
 |---|---|---|
 | JIS第3水準 | `※［＃「てへん＋劣」、第3水準1-84-77］` | JIS X 0213 マッピングで Unicode に変換 |
+| 面区点番号 | `※［＃二の字点、面区点番号1-2-22］` | JIS X 0213 マッピングで Unicode に変換 |
 | JIS第4水準 | `※［＃「字形」、第4水準2-XX-XX］` | 同上 |
 | Unicode指定 | `※［＃「字形」、U+XXXX、ページ-行］` | U+XXXX をそのまま Unicode 文字に |
 | 字形描写のみ | `※［＃「てへん＋劣」］` | 青空文庫の外字注記辞書から生成した表で Unicode に変換 |
@@ -118,19 +91,36 @@ convertGaiji('※［＃「てへん＋劣」、第3水準1-84-77］');
 
 ### `chunkText(text, count, options?): string[]`
 
-テキストを指定数のチャンクに文単位で分割します。
+全体の文字数を指定回数で等分して仮の分割位置を決めます。その回の新規本文が基準の0.5〜1.5回分に収まる範囲で、かぎ括弧 `「」` の外にある最寄りの句点 `。` まで境界を動かします。句点に続く閉じ括弧は同じ回に含めます。
+
+句点で分けられないときは、仮位置に近い文字の境界で切り、回の末尾に `…` を付けます。結合文字、外字注記、ルビ付きの親文字と読みは、分割せずひとまとまりとして扱います。文字数には親文字を数え、ルビの読み・開始記号と改行を除きます。残した外字注記は表記どおり数えます。空白だけの本文や、各回に新規本文を入れて指定回数に分割できない本文では `RangeError` が発生します。
+
+文中から始まる回には、その文の頭から既読部分を戻します。既読部分は同じ数え方で最大40文字とし、先頭を省いた場合は回の頭に `…` を付けます。新しく読む本文はすべて含めます。
+
+`overlapLastSentence`（既定値 `true`）は、文末で分けた場合に前回の最後の一文を重ねる設定です。文中で分けた場合の既読補足は、この設定にかかわらず入ります。
 
 ```ts
-type ChunkTextOptions = {
-  overlapLastSentence?: boolean; // 各チャンクの最終文を次のチャンクの先頭にも含める（default: true）
-};
+chunkText('駅を出て、川を渡り、山を越えて町に着いた。', 3);
+// → ['駅を出て、川を…', '駅を出て、川を渡り、山を越え…', '駅を出て、川を渡り、山を越えて町に着いた。']
 ```
 
-挙動：
+### `deduplicateRuby(text: string): string`
 
-- 文境界（[sentence-splitter](https://www.npmjs.com/package/sentence-splitter) を利用）で区切ります
-- 各チャンクの文字数ができるだけ揃うよう、全体最適で境界を決めます（Balanced 方式）
-- 1文がチャンクの目標サイズを大きく超える場合、文字数で強制カットします
+親文字と読みが同じルビを、渡された本文の初出だけに残します。分割で補った冒頭を含めて、各回に一度ずつ適用します。
+
+```ts
+deduplicateRuby('今日《きょう》。今日《こんにち》。今日《きょう》。');
+// → '今日《きょう》。今日《こんにち》。今日。'
+```
+
+### `addExtraLineBreaks(text: string): string`
+
+かぎ括弧 `「」` の外にある句点 `。` の直後に改行を1つ足し、既存の改行を保ちます。本文で最初に見つかる改行形式を使います。改行がない場合は LF を追加します。
+
+```ts
+addExtraLineBreaks('「明日行きます。」と彼は言った。\n次の日。');
+// → '「明日行きます。」と彼は言った。\n\n次の日。\n'
+```
 
 ## Development
 
@@ -169,8 +159,8 @@ pnpm install
 │   │   ├── gaiji-table.ts       # 自動生成、コミット、配布物に含む
 │   │   └── gaiji-shape-table.ts # 自動生成、コミット、配布物に含む
 │   ├── splitSections.ts
-│   ├── removeRuby.ts
-│   ├── removeAnnotations.ts
+│   ├── filterRuby.ts
+│   ├── removeEditorialAnnotations.ts
 │   ├── convertGaiji.ts
 │   ├── chunkText.ts
 │   └── index.ts
@@ -184,6 +174,8 @@ pnpm install
 JIS X 0213 と Unicode の対応表は [Project X0213](https://x0213.org/) が公開している `jisx0213-2004-std.txt` を利用しています（自由に利用・改変・再配布可）。
 
 字形描写の対応表は [青空文庫・外字注記辞書](https://www.aozora.gr.jp/gaiji_chuki/) を元に生成しています。
+
+常用漢字の音訓と読みを明記した熟語のデータは、[文化庁の常用漢字表の音訓索引](https://www.bunka.go.jp/kokugo_nihongo/sisaku/joho/joho/kijun/naikaku/kanji/joyokanjisakuin/) から[ブンゴウメールが抽出したデータ](https://github.com/notsobad-jp/bungo-mail-renewal/blob/2c972aed25e6063e4cf88472e8cb305aa4906dcb/src/domain/feed/aozora/joyoReadings.ts)を利用しています。
 
 ## License
 
